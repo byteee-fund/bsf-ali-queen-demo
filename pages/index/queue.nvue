@@ -1,0 +1,649 @@
+<template>
+	<view class="selfie-ctn" :style="{ width: `${screenWidth}px`, height: `${screenHeight}px` }">
+		<view class="camera-ctn" :style="{ width: `${screenWidth}px`, height: `${CameraHeight}px` }">
+			<bsf-queue-camera v-if="showCamera" :style="{ width: `${screenWidth}px`, height: `${CameraHeight}px` }"
+				class="camera-preview" ref="CameraPreviewRef" @onPermissionDeny="onPermissionDeny"
+				@onTakePhoto="onTakePhoto" @onGetFrame="onGetFrame">
+			</bsf-queue-camera>
+			<!-- 返回 -->
+			<cover-view class="prevIcon-box" @click="handleBack">
+				<cover-image src="/static/imgs/icon/back-prev.png" class="prev-icon" />
+			</cover-view>
+			<!-- 取景框 -->
+			<view class="camera-frame">
+				<view class="left-top"></view>
+				<view class="right-top"></view>
+				<view class="right-bottom"></view>
+				<view class="left-bottom"></view>
+			</view>
+		</view>
+		<!-- 设置美颜参数 -->
+		<scroll-view class="list-container" scroll-y :style="{ height: `${screenHeight - CameraHeight}px` }">
+			<!-- toggleBeauty -->
+			<button @click="toggleBeauty">{{ isBeauty ? '已关闭' :
+				'已打开'
+			}}美颜（会重置）
+			</button>
+			<button @click="onShotCut">切换摄像头</button>
+			<view class="item" v-for="(item, index) in beautys" :key="item.id">
+				<view class="label">{{ item.name }}</view>
+				<view class="stepper">
+					<button @click="decrease(index, beautys)" :disabled="item.value <= item.min">-</button>
+					<input class="input " type="text" v-model="item.value" @input="onInput($event, index)"
+						@change="handleChange(index, beautys)" :min="item.min" :max="item.max" />
+					<button @click="increase(index, beautys)" :disabled="item.value >= item.max">+</button>
+				</view>
+			</view>
+			<view class="item" v-for="(item, index) in shapes" :key="item.id">
+				<view class="label">{{ item.name }}</view>
+				<view class="stepper">
+					<button @click="decrease(index, shapes)" :disabled="item.value <= item.min">-</button>
+					<input class="input " type="text" v-model="item.value" @input="onInput($event, index)"
+						@change="handleChange(index, shapes)" :min="item.min" :max="item.max" />
+					<button @click="increase(index, shapes)" :disabled="item.value >= item.max">+</button>
+				</view>
+			</view>
+		</scroll-view>
+	</view>
+</template>
+
+<script setup>
+// import api from '@/api/index';
+import {
+	ref, computed,
+	onMounted, onUnmounted,
+	nextTick, watch
+} from 'vue';
+import { onLaunch, onShow, onHide, onLoad } from '@dcloudio/uni-app'
+// import {
+// 	setData
+// } from '@/utils/storage';
+
+const screenWidth = ref(0); // 屏幕宽度
+const screenHeight = ref(0); // 屏幕高度
+const CameraHeight = ref(0);
+const showCamera = ref(false);
+
+const beautyList = computed(() => {
+	if (uni.getSystemInfoSync().platform === 'android') {
+		return [
+			{ id: 1, name: '磨皮', value: 0.3, min: 0, max: 1 },
+			{ id: 2, name: '锐化', value: 0.3, min: 0, max: 1 },
+			{ id: 3, name: '美白', value: 0, min: 0, max: 1 },
+			{ id: 4, name: '去眼袋', value: 0.2, min: 0, max: 1 },
+			{ id: 5, name: '去法令纹', value: 0.3, min: 0, max: 1 },
+			{ id: 6, name: '色卡滤镜强度', value: 0, min: 0, max: 1 },
+			{ id: 7, name: '漂白牙齿', value: 1, min: 0, max: 1 },
+			{ id: 9, name: '腮红', value: 0, min: 0, max: 1 },
+			{ id: 8, name: '口红', value: 0.3, min: 0, max: 1 },
+			{ id: 10, name: '口红色相', value: 0, min: -0.5, max: 0.5 },
+			{ id: 11, name: '口红饱和度', value: 0.3, min: 0, max: 1 },
+			{ id: 12, name: '口红明度', value: 0.1, min: 0, max: 1 },
+			{ id: 13, name: '亮眼', value: 0.6, min: 0, max: 1 },
+			{ id: 14, name: '红润', value: 0.2, min: 0, max: 1 },
+			{ id: 15, name: '祛皱纹', value: 0.2, min: 0, max: 1 },
+			{ id: 16, name: '祛暗沉', value: 0, min: 0, max: 1 },
+			{ id: 20, name: '祛脖颈纹', value: 0, min: 0, max: 1 },
+			{ id: 21, name: '祛额头纹', value: 0, min: 0, max: 1 },
+			{ id: 22, name: '饱和度', value: 0.2, min: -1, max: 1 },
+			{ id: 23, name: '对比度', value: 0.2, min: -1, max: 1 },
+			{ id: 24, name: '人脸马赛克', value: 0, min: 0, max: 1 },
+		]
+	} else {
+		return [
+			{ id: 1, name: '磨皮', value: 0.3, min: 0, max: 1 },
+			{ id: 2, name: '锐化', value: 0.3, min: 0, max: 1 },
+			{ id: 3, name: '美白', value: 0, min: 0, max: 1 },
+			{ id: 4, name: '去眼袋', value: 0.2, min: 0, max: 1 },
+			{ id: 5, name: '去法令纹', value: 0.3, min: 0, max: 1 },
+			{ id: 6, name: '色卡滤镜强度', value: 0, min: 0, max: 1 },
+			{ id: 7, name: '漂白牙齿', value: 1, min: 0, max: 1 },
+			{ id: 9, name: '腮红', value: 0, min: 0, max: 1 },
+			{ id: 8, name: '口红', value: 0.3, min: 0, max: 1 },
+			{ id: 10, name: '口红色相', value: 0, min: -0.5, max: 0.5 },
+			{ id: 11, name: '口红饱和度', value: 0.3, min: 0, max: 1 },
+			{ id: 12, name: '口红明度', value: 0.1, min: 0, max: 1 },
+			{ id: 13, name: '亮眼', value: 0.6, min: 0, max: 1 },
+			{ id: 14, name: '红润', value: 0.2, min: 0, max: 1 },
+			{ id: 15, name: '祛皱纹', value: 0.1, min: 0, max: 1 },
+			{ id: 16, name: '祛暗沉', value: 0, min: 0, max: 1 },
+			{ id: 20, name: '祛脖颈纹', value: 0, min: 0, max: 1 },
+			{ id: 21, name: '祛额头纹', value: 0, min: 0, max: 1 },
+			{ id: 22, name: '饱和度', value: 0.2, min: -1, max: 1 },
+			{ id: 23, name: '对比度', value: 0.2, min: -1, max: 1 },
+			{ id: 24, name: '人脸马赛克', value: 0, min: 0, max: 1 },
+		]
+	}
+})
+const beautys = ref(beautyList.value)
+const shapes = computed(() => {
+	if (uni.getSystemInfoSync().platform === 'android') {
+		return [
+			{ id: 0, name: '颧骨', value: 0, min: 0, max: 1 },
+			{ id: 1, name: '削脸', value: 0.3, min: 0, max: 1 },
+			{ id: 2, name: '瘦脸', value: 0.3, min: 0, max: 1 },
+			{ id: 3, name: '脸长', value: 0.2, min: 0, max: 1 },
+			{ id: 4, name: '下巴缩短', value: 0, min: -1, max: 1 },
+			{ id: 5, name: '下巴拉长', value: 0, min: -1, max: 1 },
+			{ id: 6, name: '瘦下巴', value: 0, min: 0, max: 1 },
+			{ id: 7, name: '瘦下颌', value: 0.2, min: 0, max: 1 },
+			{ id: 8, name: '大眼', value: 0.3, min: 0, max: 1 },
+			{ id: 9, name: '眼角1', value: 0, min: 0, max: 1 },
+			{ id: 10, name: '眼距', value: 0, min: -1, max: 1 },
+			{ id: 11, name: '拉宽眼距', value: 0, min: -1, max: 1 },
+			{ id: 12, name: '眼角2', value: 0, min: -1, max: 1 },
+			{ id: 13, name: '眼睛高度', value: 0, min: -1, max: 1 },
+			{ id: 14, name: '瘦鼻', value: 0.2, min: 0, max: 1 },
+			{ id: 15, name: '鼻翼', value: 0, min: 0, max: 1 },
+			{ id: 16, name: '鼻长', value: 0, min: -1, max: 1 },
+			{ id: 17, name: '鼻头长', value: 0, min: -1, max: 1 },
+			{ id: 18, name: '唇宽', value: 0, min: -1, max: 1 },
+			{ id: 19, name: '嘴唇大小', value: 0.1, min: -1, max: 1 },
+			{ id: 20, name: '唇高', value: 0, min: -1, max: 1 },
+			{ id: 21, name: '人中', value: 0, min: -1, max: 1 },
+			{ id: 22, name: '发际线', value: 0, min: -1, max: 1 },
+			{ id: 23, name: '嘴角上扬', value: 0, min: 0, max: 1 },
+			{ id: 24, name: '最大值（保留）', value: 0, min: 0, max: 1 }
+		]
+	} else {
+		return [
+			{ id: 0, name: '颧骨', value: 0, min: 0, max: 1 },
+			{ id: 1, name: '削脸', value: 0.3, min: 0, max: 1 },
+			{ id: 2, name: '瘦脸', value: 0.3, min: 0, max: 1 },
+			{ id: 3, name: '脸长', value: 0.2, min: 0, max: 1 },
+			{ id: 4, name: '下巴缩短', value: 0, min: -1, max: 1 },
+			{ id: 5, name: '下巴拉长', value: 0, min: -1, max: 1 },
+			{ id: 6, name: '瘦下巴', value: 0, min: 0, max: 1 },
+			{ id: 7, name: '瘦下颌', value: 0.2, min: 0, max: 1 },
+			{ id: 8, name: '大眼', value: 0.3, min: 0, max: 1 },
+			{ id: 9, name: '眼角1', value: 0, min: 0, max: 1 },
+			{ id: 10, name: '眼距', value: 0, min: -1, max: 1 },
+			{ id: 11, name: '拉宽眼距', value: 0, min: -1, max: 1 },
+			{ id: 12, name: '眼角2', value: 0, min: -1, max: 1 },
+			{ id: 13, name: '眼睛高度', value: 0, min: -1, max: 1 },
+			{ id: 14, name: '瘦鼻', value: 0.2, min: 0, max: 1 },
+			{ id: 15, name: '鼻翼', value: 0, min: 0, max: 1 },
+			{ id: 16, name: '鼻长', value: 0, min: -1, max: 1 },
+			{ id: 17, name: '鼻头长', value: 0, min: -1, max: 1 },
+			{ id: 18, name: '唇宽', value: 0, min: -1, max: 1 },
+			{ id: 19, name: '嘴唇大小', value: 0.1, min: -1, max: 1 },
+			{ id: 20, name: '唇高', value: 0, min: -1, max: 1 },
+			{ id: 21, name: '人中', value: 0, min: -1, max: 1 },
+			{ id: 22, name: '发际线', value: 0, min: -1, max: 1 },
+			{ id: 23, name: '嘴角上扬', value: 0, min: 0, max: 1 },
+			{ id: 24, name: '最大值（保留）', value: 0, min: 0, max: 1 }
+		]
+	}
+})
+
+const increase = (index, arr) => {
+	const item = arr[index]
+	if (item.value < item.max) {
+		item.value = Number((item.value + 0.1).toFixed(2))
+		handleChange(index, arr)
+	}
+}
+
+const decrease = (index, arr) => {
+	const item = arr[index]
+	if (item.value > item.min) {
+		item.value = Number((item.value - 0.1).toFixed(2))
+		console.log(item.value);
+
+		handleChange(index, arr)
+	}
+}
+
+// 统一 change 事件
+// 基础美颜
+const handleChange = (index, arr) => {
+	const item = arr[index]
+	item.value = Number(item.value) // 保留小数输入并确保是数字
+	console.log(`变更：${item.name} 当前值 ${item.value}`)
+	if (arr[0].name === '颧骨') {
+		CameraPreviewRef.value.updateFaceShape(item.id, item.value)
+	} else {
+		CameraPreviewRef.value.setBeautyParam(item.id, item.value)
+	}
+}
+
+const onInput = (e, index) => {
+	let val = e.detail.value
+
+	// 允许输入格式：
+	// 1. 带小数点且最多一位小数
+	// 2. 空字符串（允许删除）
+	const validPattern = /^(\d*\.\d{0,1})?$/
+
+	if (validPattern.test(val) || val === '') {
+		// 允许输入（是小数或空）
+		beautys.value[index].value = val
+	} else {
+		beautys.value[index].value = 0
+	}
+}
+
+const CameraPreviewRef = ref(null);
+
+onShow(() => {
+	console.log('queen onShow');
+
+	const systemInfo = uni.getSystemInfoSync();
+	screenWidth.value = systemInfo.windowWidth;
+	screenHeight.value = systemInfo.windowHeight
+	CameraHeight.value = screenHeight.value - uni.upx2px(624);
+	showCamera.value = true;
+	// setTimeout(() => {
+	// 	setDefaultBeautyParams()
+	// }, 1000);
+});
+// onUnmounted(() => {
+// 	if (CameraPreviewRef.value) {
+// 		CameraPreviewRef.value.destoryCamera();
+// 	}
+// 	showCamera.value = false
+// })
+onHide(() => {
+	if (CameraPreviewRef.value) {
+		CameraPreviewRef.value.destoryCamera();
+	}
+	showCamera.value = false
+})
+
+const onPermissionDeny = () => {
+	console.log("权限被拒绝");
+	uni.showToast({
+		title: "你拒绝了权限设置，即将返回上一页",
+		icon: 'error',
+		duration: 1000
+	});
+}
+
+let isBeauty = ref(false);
+const startBeauty = () => {
+	console.log('开启美颜');
+	nextTick(() => {
+		CameraPreviewRef.value.toggleBeauty();
+		isBeauty.value = true;
+		setDefaultBeautyParams()
+	});
+}
+const toggleBeauty = () => {
+	isBeauty.value = !isBeauty.value;
+	CameraPreviewRef.value.toggleBeauty();
+	if (isBeauty.value) {
+		setDefaultBeautyParams()
+	}
+}
+
+// 设置默认美颜参数
+const setDefaultBeautyParams = () => {
+	if (!CameraPreviewRef.value) return;
+
+	try {
+		// 开启基础美颜
+		CameraPreviewRef.value.enableBeautyType(0, true, 1); // 0 = skinBuffing
+		// 开启高级美颜
+		CameraPreviewRef.value.enableBeautyType(1, true, 0); // 0 = skinBuffing
+		// 开启美妆
+		CameraPreviewRef.value.enableBeautyType(2, true, 0); // 0 = skinBuffing
+		// 开启美型  主流模式
+		CameraPreviewRef.value.enableBeautyType(3, true, 12); // 0 = skinBuffing
+		// 开启美白
+		CameraPreviewRef.value.enableBeautyType(4, true, 0); // 1 = skinWhiting
+		// 开启滤镜
+		CameraPreviewRef.value.enableBeautyType(5, true, 0); // 1 = skinWhiting
+		// 开启智能美颜
+		CameraPreviewRef.value.enableBeautyType(7, true, 0); // 1 = skinWhiting
+		// // 开启美体
+		CameraPreviewRef.value.enableBeautyType(8, true, 0); // 1 = skinWhiting
+		// // 开启智能美型
+		CameraPreviewRef.value.enableBeautyType(12, true, 12); // 1 = skinWhiting
+		// // 开启色相/饱和度/明度（HSV 调节）
+		CameraPreviewRef.value.enableBeautyType(15, true, 0); // 1 = skinWhiting
+		// // 开启人脸打马赛克
+		CameraPreviewRef.value.enableBeautyType(16, true, 0); // 1 = skinWhiting
+
+		beautys.value.forEach(item => {
+			CameraPreviewRef.value.setBeautyParam(item.id, item.value)
+		});
+		shapes.value.forEach(item => {
+			CameraPreviewRef.value.updateFaceShape(item.id, item.value)
+		});
+
+		console.log('Default beauty params set');
+	} catch (error) {
+		console.error('Failed to set default beauty params:', error);
+	}
+}
+// 开启取帧
+const startFrame = () => {
+	console.log('开启抓帧');
+	nextTick(() => {
+		CameraPreviewRef.value.startFrame(true);
+	});
+}
+//停止抓帧
+const stopFrame = () => {
+	console.log('停止抓帧');
+	nextTick(() => {
+		CameraPreviewRef.value.stopFrame(true);
+	});
+}
+
+// 切换前后镜头
+const onShotCut = (res) => {
+	CameraPreviewRef.value.toggleCamera()
+}
+// 拍照
+const takePhoto = () => {
+	CameraPreviewRef.value.takePhoto({
+		isExif: true, //是否写入exif信息
+		quality: 100, //返回图像质量 默认90  1-100
+		width: 0, //返回图像宽度 默认300  原图设置0
+		returnFile: false, //是否返回文件  默认false
+		crop: [] // crop ? [0, 0, 100, 100 * (this.scale.split(':')[1] / this.scale.split(':')[0])] : [] //成像自动裁剪，可以不传  案例计算为上半部分的正方形  0 0 50 50 表示右上方1/4区域
+	},
+		res => {
+			//uni.setStorageSync('base64SelfieImg', 'data:image/jpg;base64,' + res.data);
+			uni.$store.dispatch("setSelfieImgBase64", `data:image/jpg;base64,${res.data}`);
+			uni.navigateTo({
+				url: "/pages/index/tryOn/photoConfirm"
+			});
+			stopFrame()
+			uni.hideLoading();
+
+			//const FSYANGPicTool = uni.requireNativePlugin('FSYANG-PicTool')
+			// FSYANGPicTool.compressImage({
+			// 		path: res.url, //压缩的图片路径 必传
+			// 		maxWidth: 600, //压缩最大宽度  默认 612,可不传
+			// 		maxHeight: 800, //压缩最大高度  默认 816,可不传
+			// 		quality: 80, //压缩质量 默认80,可不传
+			// 		targetPath: '', //压缩后图片保存路径 默认在当前目录，文件名'compress_{fileName}',可不传
+			// 		format: 'webp' //jpg,png,webp(默认) ,可不传
+			// 	},
+			// 	tRes => {
+
+			// 	}
+			// )
+		}
+	)
+}
+// 从相册选择
+const handlePhotoAlbum = () => {
+	uni.chooseImage({
+		count: 1,
+		sizeType: ['compressed'], //可以指定是原图还是压缩图，默认二者都有
+		sourceType: ['album'], //从相册选择
+		success: async function (res) {
+			handleImage(res.tempFilePaths[0]);
+			// convertToBase64(res.tempFilePaths[0]);
+		}
+	});
+}
+// 图片美颜处理
+const processImageBeauty = () => {
+	try {
+		// 这里可以添加选择图片的逻辑
+		uni.chooseImage({
+			count: 1,
+			success: (res) => {
+				const imagePath = res.tempFilePaths[0];
+				// TODO: 这里需要调用Queen引擎的图片处理接口
+				// const processedImageBase64 = processImage(imagePath);
+
+				uni.showToast({
+					title: '图片美颜功能待实现',
+					icon: 'none'
+				});
+				console.log('Selected image path:', imagePath);
+			},
+			fail: (error) => {
+				console.error('Failed to choose image:', error);
+				uni.showToast({
+					title: '选择图片失败',
+					icon: 'error'
+				});
+			}
+		});
+	} catch (error) {
+		console.error('Failed to process image beauty:', error);
+		uni.showToast({
+			title: '图片美颜处理失败',
+			icon: 'error'
+		});
+	}
+}
+// 转base64
+const convertToBase64 = (tempFilePath) => {
+	// App 环境使用 HTML5+ API
+	if (uni.getSystemInfoSync().platform === 'android' || uni.getSystemInfoSync().platform === 'ios') {
+		plus.io.resolveLocalFileSystemURL(tempFilePath, (entry) => {
+			entry.file((file) => {
+				const reader = new plus.io.FileReader();
+				reader.readAsDataURL(file);
+				reader.onloadend = (e) => {
+					const base64Img = e.target.result;
+					// 拿到相册图片后，要转成base64格式
+					uploadImg(base64Img);
+				};
+			});
+		});
+	}
+}
+// 处理相册图片
+const handleImage = (tempFilePath) => {
+	plus.io.requestFileSystem(plus.io.PRIVATE_DOC, (fs) => {
+		const pathArr = tempFilePath.split("/");
+		const fileName = pathArr[pathArr.length - 1];
+		const dstPath = `${fs.root.fullPath}/${fileName}`;
+
+		plus.zip.compressImage({
+			src: tempFilePath,
+			dst: dstPath,
+			overwrite: true,
+			format: "jpg",
+			quality: 90,
+		},
+			(success) => {
+				const compressedPath = success.target;
+				plus.io.resolveLocalFileSystemURL(compressedPath, (entry) => {
+					entry.file((file) => {
+						const fileReader = new plus.io.FileReader();
+						fileReader.onloadend = (evt) => {
+							// 拿到相册图片后，要转成base64格式
+							uploadImg(evt.target.result);
+						};
+						fileReader.onerror = (error) => {
+							console.error("读取文件失败:", error);
+						};
+						fileReader.readAsDataURL(file);
+					}, (error) => {
+						console.error("获取文件失败:", error);
+					});
+				}, (error) => {
+					console.error("解析路径失败:", error);
+				});
+			},
+			(error) => {
+				console.error("压缩图片失败:", error);
+			}
+		);
+	}, (error) => {
+		console.error("获取文件系统失败:", error);
+	});
+}
+// 上传图片
+const uploadImg = async (base64Img) => {
+	try {
+		const res = await api.base64ToImg({
+			base64: base64Img
+		});
+		// 把base64格式的图片上传，得到url，再校验一下当前图片是否规范
+		if (res?.data) {
+			getHairFace(res?.data);
+		}
+	} catch (err) {
+		console.log(err);
+	}
+}
+// 获取三庭五眼信息
+const getHairFace = async (imgUrl) => {
+	try {
+		let params = {
+			img: imgUrl,
+			isLocal: true,
+		};
+		const res = await api.getHairFace(params);
+		if (res?.data?.faceDetail) {
+			setData("selfieImgUrl", imgUrl);
+
+			nextTick(() => {
+				jumpPage(imgUrl);
+			});
+		}
+	} catch (err) {
+		console.log("err", err);
+	}
+}
+// 跳转页面，需要等图片加载完成后才能跳转
+const jumpPage = async (imgUrl) => {
+	uni.showLoading({
+		title: '加载中...',
+		mask: true
+	});
+	uni.$store.dispatch("setIsJudge", true);
+	uni.$store.dispatch("setLoadComplete", false);
+	uni.$store.dispatch("setSelfieImgTemp", imgUrl);
+
+	// 通过watch里的逻辑返回
+}
+watch(() => uni.$store.state.loadComplete, (newVal, oldVal) => {
+	// 在试戴页加载完图片后，才能返回
+	if (newVal === true && uni.$store.state.isJudge === true) {
+		nextTick(() => {
+			uni.$store.dispatch("setIsJudge", false);
+			const pages = getCurrentPages();
+			const tIdx = pages.findIndex(page => page.route === 'pages/index/tryOn/index');
+			const delta = pages.length - tIdx - 1;
+			uni.hideLoading();
+			uni.navigateBack({
+				delta
+			});
+		})
+	}
+});
+
+// 返回
+const handleBack = () => {
+	uni.navigateBack({
+		delta: 1 // 返回上一页
+	});
+}
+</script>
+
+<style lang="scss" scoped>
+.selfie-ctn {
+	position: relative;
+
+	.camera-ctn {
+		position: relative;
+		// background-color: red;
+
+		.camera-preview {
+			z-index: 0;
+		}
+
+		.camera-frame {
+			width: 312rpx;
+			height: 408rpx;
+			position: absolute;
+			left: 219rpx;
+			top: 268rpx;
+
+			.left-top {
+				width: 80rpx;
+				height: 80rpx;
+				border-top: 4rpx solid #fff;
+				border-left: 4rpx solid #fff;
+				border-radius: 40rpx 0 0 0;
+				position: absolute;
+				left: 0;
+				top: 0;
+			}
+
+			.right-top {
+				width: 80rpx;
+				height: 80rpx;
+				border-top: 4rpx solid #fff;
+				border-right: 4rpx solid #fff;
+				border-radius: 0 40rpx 0 0;
+				position: absolute;
+				right: 0;
+				top: 0;
+			}
+
+			.right-bottom {
+				width: 80rpx;
+				height: 80rpx;
+				border-bottom: 4rpx solid #fff;
+				border-right: 4rpx solid #fff;
+				border-radius: 0 0 40rpx 0;
+				position: absolute;
+				right: 0;
+				bottom: 0;
+			}
+
+			.left-bottom {
+				width: 80rpx;
+				height: 80rpx;
+				border-bottom: 4rpx solid #fff;
+				border-left: 4rpx solid #fff;
+				border-radius: 0 0 0 40rpx;
+				position: absolute;
+				left: 0;
+				bottom: 0;
+			}
+		}
+	}
+}
+
+.list-container {
+	padding: 20rpx;
+
+	.item {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		margin-bottom: 20rpx;
+		padding: 20rpx;
+		border-radius: 12rpx;
+	}
+
+	.label {
+		width: 250rpx;
+		font-size: 20rpx;
+	}
+
+	.stepper {
+		flex: 1;
+		display: flex;
+		flex-direction: row;
+		margin-left: 20rpx;
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	.stepper button {
+		font-size: 40rpx;
+	}
+
+	.input {
+		flex: 1;
+		min-width: 100rpx;
+		text-align: center;
+		margin: 0 10rpx;
+		font-size: 32rpx;
+	}
+}
+</style>

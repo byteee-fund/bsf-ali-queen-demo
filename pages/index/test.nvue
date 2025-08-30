@@ -1,0 +1,552 @@
+<template>
+	<view class="selfie-ctn" :style="{ width: `${screenWidth}px`, height: `${screenHeight}px` }">
+		<view class="camera-ctn" :style="{ width: `${screenWidth}px`, height: `${CameraHeight}px` }">
+			<bsf-queue-camera v-if="showCamera" :style="{ width: `${screenWidth}px`, height: `${CameraHeight}px` }"
+				class="camera-preview" ref="CameraPreviewRef" @onPermissionDeny="onPermissionDeny"
+				@onTakePhoto="onTakePhoto" @onGetFrame="onGetFrame" @onBeautyImage="onGetBeautyImage"  @onPermissionPermit="onPermissionPermit">
+			</bsf-queue-camera>
+			<!-- 返回 -->
+			<cover-view class="back-box" @click="handleBack">
+				<cover-image src="/static/imgs/icon/back-prev.png" class="prev-icon" />
+			</cover-view>
+			<!-- 取景框 -->
+			<view class="camera-frame">
+				<view class="left-top"></view>
+				<view class="right-top"></view>
+				<view class="right-bottom"></view>
+				<view class="left-bottom"></view>
+			</view>
+		</view>
+		<view class="operate-ctn" :style="{ width: `${screenWidth}px` }">
+			<view class="text-ctn">
+				<view><text class="text-box">请尽量摘下眼镜、帽子、口罩等遮挡物</text></view>
+				<view><text class="text-box">在光线充足的地方拍摄</text></view>
+			</view>
+			<view class="operate-ul">
+				<view class="photoAlbum-li">
+					<image src="/static/imgs/photoLibrary/p1.png" class="photoAlbum-img" @click="handlePhotoAlbum" />
+					<view><text style="font-size: 24rpx; font-weight: 500;">相册</text></view>
+				</view>
+				<view class="camera-li" @click="takePhoto">
+					<image src="/static/imgs/tryOn/camera.png" class="camera-img" />
+				</view>
+				<view class="turn-li">
+					<view class="turn-img-box" @click="onShotCut">
+						<image src="/static/imgs/tryOn/turn.png" class="turn-img" />
+					</view>
+					<view><text style="font-size: 24rpx; font-weight: 500;">翻转</text></view>
+				</view>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script setup>
+// import api from '@/api/index';
+
+import { initEngine,enableBeautyType,setBeautyParam,updateFaceShape,beautifyImage } from '../../uni_modules/bsf-ali-queen';
+
+import {
+	ref,
+	onMounted,
+	nextTick,
+	watch
+} from 'vue';
+// import {
+// 	setData
+// } from '@/utils/storage';
+
+import {onLaunch, onShow, onHide, onLoad} from '@dcloudio/uni-app'
+
+const screenWidth = ref(0); // 屏幕宽度
+const screenHeight = ref(0); // 屏幕高度
+const CameraHeight = ref(0);
+const showCamera = ref(false);
+
+const CameraPreviewRef = ref(null);
+
+onShow(() => {
+	const systemInfo = uni.getSystemInfoSync();
+	console.log(systemInfo);
+	screenWidth.value = systemInfo.windowWidth;
+	screenHeight.value = systemInfo.windowHeight
+	CameraHeight.value = screenHeight.value - uni.upx2px(624); ; // 624
+	
+	console.log("camera size", screenWidth.value,CameraHeight.value);
+	showCamera.value = true;
+	
+	// startBeauty();
+	// startBeauty()
+	// 用来给试戴页面做判断
+	// setData("selfiePage", true);
+	// uni.$store.dispatch("setIsJudge", false);
+});
+
+const onPermissionDeny = () => {
+	console.log("权限被拒绝");
+	uni.showToast({
+		title: "你拒绝了权限设置，即将返回上一页",
+		icon: 'error',
+		duration: 1000
+	});
+}
+const beautys = ref([
+	{ id: 1, name: '磨皮', value: 1, min: 0, max: 1 },
+	{ id: 2, name: '锐化', value: 1, min: 0, max: 1 },
+	{ id: 3, name: '美白', value: 1, min: 0, max: 1 },
+	{ id: 4, name: '去眼袋', value: 1, min: 0, max: 1 },
+	{ id: 5, name: '去法令纹', value: 1, min: 0, max: 1 },
+	{ id: 6, name: '色卡滤镜强度', value: 0, min: 0, max: 1 },
+	{ id: 7, name: '漂白牙齿', value: 1, min: 0, max: 1 },
+	{ id: 9, name: '腮红', value: 1, min: 0, max: 1 },
+	{ id: 8, name: '口红', value: 0.9, min: 0, max: 1 },
+	{ id: 10, name: '口红色相', value: 0.5, min: -0.5, max: 0.5 },
+	{ id: 11, name: '口红饱和度', value: 0.4, min: 0, max: 1 },
+	{ id: 12, name: '口红明度', value: 0.6, min: 0, max: 1 },
+	{ id: 13, name: '亮眼', value: 0, min: 0, max: 1 },
+	{ id: 14, name: '红润', value: 0, min: 0, max: 1 },
+	{ id: 15, name: '祛皱纹', value: 1, min: 0, max: 1 },
+	{ id: 16, name: '祛暗沉', value: 1, min: 0, max: 1 },
+	{ id: 20, name: '祛脖颈纹', value: 1, min: 0, max: 1 },
+	{ id: 21, name: '祛额头纹', value: 1, min: 0, max: 1 },
+	{ id: 22, name: '饱和度', value: 0, min: -1, max: 1 },
+	{ id: 23, name: '对比度', value: 0, min: -1, max: 1 },
+	{ id: 24, name: '人脸马赛克', value: 0, min: 0, max: 1 },
+])
+const startBeauty = () => {
+	console.log('开启美颜');
+	nextTick(() => {
+		setTimeout(()=>{
+			console.log('开启美颜22');
+			// CameraPreviewRef.value.toggleBeauty();
+			setDefaultBeautyParams()
+		}, 2000)
+		
+		
+		// setTimeout(()=>{
+		// 	startFrame()
+		// }, 10000)
+		
+	});
+}
+// 设置默认美颜参数
+const setDefaultBeautyParams = () => {
+	if (!CameraPreviewRef.value) return;
+
+	try {
+		// 开启基础美颜
+		CameraPreviewRef.value.enableBeautyType(0, true, 1); // 0 = skinBuffing
+		// 开启高级美颜
+		CameraPreviewRef.value.enableBeautyType(1, true, 0); // 0 = skinBuffing
+		// 开启美妆
+		CameraPreviewRef.value.enableBeautyType(2, true, 0); // 0 = skinBuffing
+		// 开启美型  主流模式
+		CameraPreviewRef.value.enableBeautyType(3, true, 12); // 0 = skinBuffing
+		// 开启美白
+		CameraPreviewRef.value.enableBeautyType(4, true, 0); // 1 = skinWhiting
+		// 开启滤镜
+		CameraPreviewRef.value.enableBeautyType(5, true, 0); // 1 = skinWhiting
+		// 开启智能美颜
+		CameraPreviewRef.value.enableBeautyType(7, true, 0); // 1 = skinWhiting
+		// // 开启美体
+		CameraPreviewRef.value.enableBeautyType(8, true, 0); // 1 = skinWhiting
+		// // 开启智能美型
+		// CameraPreviewRef.value.enableBeautyType(12, true, 12); // 1 = skinWhiting
+		// // 开启色相/饱和度/明度（HSV 调节）
+		CameraPreviewRef.value.enableBeautyType(15, true, 0); // 1 = skinWhiting
+		// // 开启人脸打马赛克
+		CameraPreviewRef.value.enableBeautyType(16, true, 0); // 1 = skinWhiting
+		CameraPreviewRef.value.setBeautyParam(3, 1);
+		beautys.value.forEach(item => {
+			CameraPreviewRef.value.setBeautyParam(item.id, item.value)
+		});
+
+		console.log('Default beauty params set');
+	} catch (error) {
+		console.error('Failed to set default beauty params:', error);
+	}
+}
+// 开启取帧
+const startFrame = () => {
+	console.log('开启抓帧');
+	nextTick(() => {
+		CameraPreviewRef.value.startFrame(true);
+	});
+}
+//停止抓帧
+const stopFrame = () => {
+	console.log('停止抓帧');
+	nextTick(() => {
+		CameraPreviewRef.value.stopFrame(true);
+	});
+}
+
+// 切换前后镜头
+const onShotCut = (res) => {
+	CameraPreviewRef.value.toggleCamera()
+	
+}
+// 拍照
+const takePhoto = () => {
+	CameraPreviewRef.value.takePhoto()
+}
+// 相机相关方法
+const onTakePhoto = (res) => {
+	console.log('拍照结果:', res);
+	// console.log('拍照结果详情:', JSON.stringify(res, null, 2));
+	
+	// 检查不同的可能数据结构
+	let base64Data = '';
+	if (res.detail && res.detail.base64) {
+		base64Data = res.detail.base64;
+	} else if (res.base64) {
+		base64Data = res.base64;
+	} else if (res.data && res.data.base64) {
+		base64Data = res.data.base64;
+	} else {
+		console.error('未找到base64数据');
+		uni.showToast({
+			title: '拍照失败，未获取到图片数据',
+			icon: 'error'
+		});
+		return;
+	}
+	
+	// 确保base64数据格式正确
+	if (!base64Data.startsWith('data:')) {
+		base64Data = `data:image/jpeg;base64,${base64Data}`;
+	}
+	
+	console.log('处理后的base64数据长度:', base64Data.length);
+	uni.$store.dispatch("setSelfieImgBase64", base64Data);
+	
+	// 延迟跳转，确保数据已保存
+	setTimeout(() => {
+		uni.navigateTo({
+			url: "/pages/index/image"
+		});
+	}, 100);
+}
+// 从相册选择
+const handlePhotoAlbum = () => {
+	uni.navigateTo({
+		url: '/pages/index/ablum'
+	});
+}
+const onGetBeautyImage = (res) => {
+	console.log('获取美颜后的照片:', res);
+	// uploadImg(`data:image/jpg;base64,${res.detail.base64}`)
+}
+// 转base64
+const convertToBase64 = (tempFilePath) => {
+	// App 环境使用 HTML5+ API
+	if (uni.getSystemInfoSync().platform === 'android' || uni.getSystemInfoSync().platform === 'ios') {
+		plus.io.resolveLocalFileSystemURL(tempFilePath, (entry) => {
+			entry.file((file) => {
+				const reader = new plus.io.FileReader();
+				reader.readAsDataURL(file);
+				reader.onloadend = (e) => {
+					const base64Img = e.target.result;
+					// 拿到相册图片后，要转成base64格式
+					uploadImg(base64Img);
+				};
+			});
+		});
+	}
+}
+// 处理相册图片
+const handleImage = (tempFilePath) => {
+	plus.io.requestFileSystem(plus.io.PRIVATE_DOC, (fs) => {
+		const pathArr = tempFilePath.split("/");
+		const fileName = pathArr[pathArr.length - 1];
+		const dstPath = `${fs.root.fullPath}/${fileName}`;
+
+		plus.zip.compressImage({
+			src: tempFilePath,
+			dst: dstPath,
+			overwrite: true,
+			format: "jpg",
+			quality: 90,
+		},
+			(success) => {
+				const compressedPath = success.target;
+				plus.io.resolveLocalFileSystemURL(compressedPath, (entry) => {
+					entry.file((file) => {
+						const fileReader = new plus.io.FileReader();
+						fileReader.onloadend = (evt) => {
+							// 拿到相册图片后，要转成base64格式
+							uploadImg(evt.target.result);
+						};
+						fileReader.onerror = (error) => {
+							console.error("读取文件失败:", error);
+						};
+						fileReader.readAsDataURL(file);
+					}, (error) => {
+						console.error("获取文件失败:", error);
+					});
+				}, (error) => {
+					console.error("解析路径失败:", error);
+				});
+			},
+			(error) => {
+				console.error("压缩图片失败:", error);
+			}
+		);
+	}, (error) => {
+		console.error("获取文件系统失败:", error);
+	});
+}
+// 上传图片
+const uploadImg = async (base64Img) => {
+	// try {
+	// 	const res = await api.base64ToImg({
+	// 		base64: base64Img
+	// 	});
+	// 	// 把base64格式的图片上传，得到url，再校验一下当前图片是否规范
+	// 	if (res?.data) {
+	// 		getHairFace(res?.data);
+	// 	}
+	// } catch (err) {
+	// 	console.log(err);
+	// }
+}
+// 获取三庭五眼信息
+const getHairFace = async (imgUrl) => {
+	// try {
+	// 	let params = {
+	// 		img: imgUrl,
+	// 		isLocal: true,
+	// 	};
+	// 	const res = await api.getHairFace(params);
+	// 	if (res?.data?.faceDetail) {
+	// 		setData("selfieImgUrl", imgUrl);
+
+	// 		nextTick(() => {
+	// 			jumpPage(imgUrl);
+	// 		});
+	// 	}
+	// } catch (err) {
+	// 	console.log("err", err);
+	// }
+}
+// 跳转页面，需要等图片加载完成后才能跳转
+const jumpPage = async (imgUrl) => {
+	uni.showLoading({
+		title: '加载中...',
+		mask: true
+	});
+	uni.$store.dispatch("setIsJudge", true);
+	uni.$store.dispatch("setLoadComplete", false);
+	uni.$store.dispatch("setSelfieImgTemp", imgUrl);
+
+	// 通过watch里的逻辑返回
+}
+watch(() => uni.$store.state.loadComplete, (newVal, oldVal) => {
+	// 在试戴页加载完图片后，才能返回
+	if (newVal === true && uni.$store.state.isJudge === true) {
+		nextTick(() => {
+			uni.$store.dispatch("setIsJudge", false);
+			const pages = getCurrentPages();
+			const tIdx = pages.findIndex(page => page.route === 'pages/index/tryOn/index');
+			const delta = pages.length - tIdx - 1;
+			uni.hideLoading();
+			uni.navigateBack({
+				delta
+			});
+		})
+	}
+});
+
+const onGetFrame = (res) => { 
+	console.log('获取帧数据:', res);
+}
+
+onHide(() => {
+	console.log('页面隐藏');
+	if (CameraPreviewRef.value) {
+		CameraPreviewRef.value.destoryCamera();
+	}
+	showCamera.value = false
+})
+
+// 返回
+const handleBack = () => {
+	uni.navigateBack({
+		delta: 1 // 返回上一页
+	});
+}
+</script>
+
+<style lang="scss">
+.selfie-ctn {
+	position: relative;
+
+	.camera-ctn {
+		position: relative;
+		// background-color: red;
+
+		.camera-preview {
+			z-index: 0;
+		}
+
+		.back-box {
+			width: 80rpx;
+			height: 80rpx;
+			border-radius: 50%;
+			position: absolute;
+			left: 44rpx;
+			top: 122rpx;
+			z-index: 999;
+
+			.prev-icon {
+				width: 20rpx;
+				height: 36rpx;
+				position: absolute;
+				left: 30rpx;
+				top: 22rpx;
+			}
+		}
+
+		.camera-frame {
+			width: 312rpx;
+			height: 408rpx;
+			position: absolute;
+			left: 219rpx;
+			top: 268rpx;
+
+			.left-top {
+				width: 80rpx;
+				height: 80rpx;
+				border-top: 4rpx solid #fff;
+				border-left: 4rpx solid #fff;
+				border-radius: 40rpx 0 0 0;
+				position: absolute;
+				left: 0;
+				top: 0;
+			}
+
+			.right-top {
+				width: 80rpx;
+				height: 80rpx;
+				border-top: 4rpx solid #fff;
+				border-right: 4rpx solid #fff;
+				border-radius: 0 40rpx 0 0;
+				position: absolute;
+				right: 0;
+				top: 0;
+			}
+
+			.right-bottom {
+				width: 80rpx;
+				height: 80rpx;
+				border-bottom: 4rpx solid #fff;
+				border-right: 4rpx solid #fff;
+				border-radius: 0 0 40rpx 0;
+				position: absolute;
+				right: 0;
+				bottom: 0;
+			}
+
+			.left-bottom {
+				width: 80rpx;
+				height: 80rpx;
+				border-bottom: 4rpx solid #fff;
+				border-left: 4rpx solid #fff;
+				border-radius: 0 0 0 40rpx;
+				position: absolute;
+				left: 0;
+				bottom: 0;
+			}
+		}
+	}
+
+	/* // 下面的操作区域 */
+	.operate-ctn {
+		height: 624rpx;
+		background: #fff;
+		border-radius: 40rpx 40rpx 0 0;
+		position: absolute;
+		left: 0;
+		bottom: 0;
+
+		/* // 文字 */
+		.text-ctn {
+			display: flex;
+			flex-direction: column;
+			justify-content: center;
+			margin-top: 60rpx;
+			margin-bottom: 120rpx;
+
+			.text-box {
+				font-size: 28rpx;
+				font-weight: 500;
+				color: #4a4b4d;
+				text-align: center;
+			}
+		}
+
+		.operate-ul {
+			display: flex;
+			flex-direction: row;
+			align-items: flex-end;
+			justify-content: center;
+
+			/* // 相册 */
+			.photoAlbum-li {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				padding: 20rpx 20rpx 0 20rpx;
+
+				.photoAlbum-img {
+					width: 100rpx;
+					height: 100rpx;
+					border-radius: 50%;
+				}
+			}
+
+			/* // 拍照 */
+			.camera-li {
+				width: 160rpx;
+				height: 160rpx;
+				border-radius: 50%;
+				background: #242527;
+				margin: 0 74rpx;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+
+				.camera-img {
+					width: 68rpx;
+					height: 60rpx;
+				}
+			}
+
+			/* // 切换摄像头 */
+			.turn-li {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				padding: 20rpx 20rpx 0 20rpx;
+
+				.turn-img-box {
+					width: 100rpx;
+					height: 100rpx;
+					border-radius: 50%;
+					box-shadow: 0rpx 0rpx 20rpx rgba(122, 122, 122, 0.3);
+					background: #fff;
+					overflow: hidden;
+					display: flex;
+					align-items: center;
+					justify-content: center;
+
+					.turn-img {
+						width: 50rpx;
+						height: 42rpx;
+					}
+				}
+			}
+		}
+	}
+}
+</style>

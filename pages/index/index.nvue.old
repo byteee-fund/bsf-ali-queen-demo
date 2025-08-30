@@ -1,0 +1,820 @@
+<template>
+	<scroll-view scroll-y="true" class="content">
+		<!-- <image class="logo" src="/static/logo.png"></image> -->
+		<view class="text-area">
+			<text class="title">{{title}}</text>
+		</view>
+		
+		<!-- UTS插件DEMO -->
+		<view class="demo-section">
+		
+			<!-- 初始化引擎 -->
+<!-- 			<view class="btn btn-primary" :class="{'btn-disabled': engineInitialized}" @tap="initBeautyEngine">
+				<text class="btn-text">{{ engineInitialized ? '引擎已初始化' : '初始化美颜引擎' }}</text>
+			</view> -->
+			
+			<!-- 图片美颜 -->
+<!-- 			<view class="btn btn-primary" :class="{'btn-disabled': !engineInitialized}" @tap="processImageBeauty">
+				<text class="btn-text">2. 图片美颜</text>
+			</view> -->
+			
+			<!-- 相机美颜 -->
+		<!-- 	<view class="btn btn-primary" :class="{'btn-disabled': !engineInitialized}" @tap="toggleCameraBeauty">
+				<text class="btn-text">{{ cameraBeautyEnabled ? '关闭相机美颜' : '开启相机美颜' }}</text>
+			</view> -->
+			
+			<!-- 销毁引擎 -->
+<!-- 			<view class="btn btn-primary" :class="{'btn-disabled': !engineInitialized}" @tap="destroyBeautyEngine">
+				<text class="btn-text">4. 销毁引擎</text>
+			</view> -->
+			
+			<!-- 状态显示 -->
+			<view class="status-section">
+				<!-- <text class="status-text">引擎状态: {{ engineInitialized ? '已初始化' : '未初始化' }}</text> -->
+				<!-- <text class="status-text">相机美颜: {{ cameraBeautyEnabled ? '已开启' : '未开启' }}</text> -->
+			</view>
+
+			<!-- 相机组件 -->
+		<view class="camera-container" >
+			<view class="camera-wrapper">
+				<bsf-queue-camera
+					style="width: 100%; height: 1200rpx; z-index: 9999;" 
+					ref="CameraView" 
+					class="camera-view" 
+					@onPermissionDeny="onPermissionDeny" 
+					@onTakePhoto="onTakePhoto" 
+					@onGetFrame="onGetFrame"
+					@onBeautyImage="onGetBeautyImage"
+					@click="showFocus">
+				</bsf-queue-camera>
+				
+				<!-- 覆盖在相机上的UI元素 -->
+				<cover-view class="camera-overlay-top">
+					<cover-view class="overlay-info">
+						<text class="overlay-text">实时预览</text>
+					</cover-view>
+				</cover-view>
+				
+				<cover-view class="camera-overlay-center">
+					<cover-view class="focus-box" v-if="showFocusBox">
+						<cover-view class="focus-border"></cover-view>
+					</cover-view>
+				</cover-view>
+				
+				<cover-view class="camera-overlay-bottom">
+					<cover-view class="beauty-indicator" v-if="cameraBeautyEnabled">
+						<text class="indicator-text">美颜已开启</text>
+					</cover-view>
+				</cover-view>
+			</view>
+		</view>
+		
+		<cover-view class="camera-controls">
+			<button class="control-btn" @click="switchCamera">切换摄像头</button>
+			<button class="control-btn" @click="openFlash">手电筒</button>
+			<button class="control-btn"  @click="toggleCameraBeauty">切换美颜</button>
+			<button class="control-btn" v-if="!startFraming" @click="startFrame">开启抓帧</button>
+			<button class="control-btn" v-else @click="stopFrame">停止抓帧</button>
+			<button class="control-btn" @click="takePhoto">拍照</button>
+			<button class="control-btn" @click="chooseImage">选择图片</button>
+			<!-- <button class="control-btn" @click="stopCamera">关闭相机</button> -->
+		</cover-view>
+		
+		<!-- 图片预览区域 -->
+		<view class="image-preview-section" v-if="showImagePreview">
+			<view class="preview-header">
+				<text class="preview-title">已选择图片 ({{ selectedImages.length }})</text>
+				<button class="clear-btn" @click="clearSelectedImages">清除</button>
+			</view>
+			<view class="preview-tips">
+				<text class="tips-text">点击图片可预览，支持缩放查看</text>
+			</view>
+			<scroll-view scroll-x="true" class="image-scroll">
+				<view class="image-list">
+					<view class="image-item" v-for="(image, index) in selectedImages" :key="index">
+						<image class="preview-image" :src="image" @click="previewImage(index)" mode="aspectFill"></image>
+						<view class="image-index">{{ index + 1 }}</view>
+					</view>
+				</view>
+			</scroll-view>
+		</view>
+			
+			<!-- 美颜参数调节 -->
+			<!-- <view class="params-section" >
+				<text class="params-title">美颜参数调节</text>
+				
+			
+				<view class="param-item">
+					<text class="param-label">磨皮强度: {{ skinBuffingValue }}</text>
+					<slider class="param-slider" :value="skinBuffingValue" @change="onSkinBuffingChange" min="0" max="1" step="0.1" />
+				</view>
+				
+				
+				<view class="param-item">
+					<text class="param-label">美白强度: {{ skinWhitingValue }}</text>
+					<slider class="param-slider" :value="skinWhitingValue" @change="onSkinWhitingChange" min="0" max="1" step="0.1" />
+				</view>
+				
+			
+				<view class="param-item">
+					<text class="param-label">大眼强度: {{ eyeEnlargeValue }}</text>
+					<slider class="param-slider" :value="eyeEnlargeValue" @change="onEyeEnlargeChange" min="0" max="1" step="0.1" />
+				</view>
+				
+			
+				<view class="param-item">
+					<text class="param-label">瘦脸强度: {{ faceThinValue }}</text>
+					<slider class="param-slider" :value="faceThinValue" @change="onFaceThinChange" min="0" max="1" step="0.1" />
+				</view>
+			</view> -->
+		</view>
+		
+		
+	</scroll-view>
+</template>
+
+<script>
+	// 导入UTS插件
+	// import { initEngine, destroyEngine,isEngineReady,setBeautyType,setBeautyParam } from '../../uni_modules/bsf-ali-queen';
+	
+	export default {
+		data() {
+			return {
+				title: 'Queen美颜引擎DEMO',
+				engineInitialized: false,
+				cameraBeautyEnabled: false,
+				startFraming: false,
+				// 美颜参数
+				skinBuffingValue: 0.5,
+				skinWhitingValue: 0.3,
+				eyeEnlargeValue: 0.2,
+				faceThinValue: 0.3,
+						// 相机相关
+				src: '/static/logo.png',
+				text: '',
+				returnisFile: false,
+				flashOpen: false,
+				showFocusBox: false,
+				// 相册相关
+				selectedImages: [],
+				showImagePreview: false
+			}
+		},
+		onLoad() {
+			// 页面加载时检查引擎状态
+			// this.checkEngineStatus();
+		},
+		onShow() {
+			// 页面显示时的处理
+		},
+		onUnload() {
+			// 页面卸载时关闭相机
+			// if (this.cameraBeautyEnabled) {
+			// 	this.stopCamera();
+			// }
+		},
+		onHide() {
+			// 页面隐藏时关闭相机
+			// if (this.cameraBeautyEnabled) {
+			// 	this.stopCamera();
+			// }
+		},
+		methods: {
+			// 检查引擎状态
+			checkEngineStatus() {
+				try {
+					if (this.$refs.CameraView) {
+						this.engineInitialized = this.$refs.CameraView.isEngineReady();
+					}
+					
+					console.log('Engine status:', this.engineInitialized);
+				} catch (error) {
+					console.error('Failed to check engine status:', error);
+				}
+			},
+			
+			// 初始化美颜引擎
+			// initBeautyEngine() {
+			// 	try {
+			// 		const initOptions = {
+			// 			licenseKey: 'vPbqtgx4UHuy4gJobc5640b9145fe4770820af1eac919c258',
+			// 			licenseFile: 'AliVideoCert-com_byteee_uniappdemo-20250630094102.crt',
+			// 			autoSettingImgAngle: true,
+			// 			resRootPath: ""
+			// 		};
+					
+			// 		const success = initEngine(initOptions);
+			// 		if (success) {
+			// 			this.engineInitialized = true;
+			// 			uni.showToast({
+			// 				title: '美颜引擎初始化成功',
+			// 				icon: 'success'
+			// 			});
+						
+						
+			// 		} else {
+			// 			uni.showToast({
+			// 				title: '美颜引擎初始化失败',
+			// 				icon: 'error'
+			// 			});
+			// 		}
+			// 	} catch (error) {
+			// 		console.error('Failed to init beauty engine:', error);
+			// 		uni.showToast({
+			// 			title: '初始化失败: ' + error.message,
+			// 			icon: 'error'
+			// 		});
+			// 	}
+			// },
+			
+			// 设置默认美颜参数
+			setDefaultBeautyParams() {
+				if (!this.$refs.CameraView) return;
+				
+				try {
+					// 开启磨皮
+					this.$refs.CameraView.enableBeautyType(0, true, 0); // 0 = skinBuffing
+					this.$refs.CameraView.setBeautyParam(1, this.skinBuffingValue);
+
+					// 设置锐化系数
+					this.$refs.CameraView.setBeautyParam(2, 0.5);
+					
+					// 开启美白
+					this.$refs.CameraView.enableBeautyType(4, true, 0); // 1 = skinWhiting
+					this.$refs.CameraView.setBeautyParam(3, this.skinWhitingValue);
+					
+					// 开启大眼
+					// setBeautyType(4, true); // 4 = eyeEnlarge
+					// setBeautyParam(4, this.eyeEnlargeValue);
+					
+					// 开启瘦脸
+					// setBeautyType(5, true); // 5 = faceThin
+					// setBeautyParam(5, this.faceThinValue);
+					
+					console.log('Default beauty params set');
+				} catch (error) {
+					console.error('Failed to set default beauty params:', error);
+				}
+			},
+			
+			
+			setAdvanceBeautyParams() {
+				try {
+					// 开启高级美颜
+					this.$refs.CameraView.enableBeautyType(1, true, 0); // 0 = skinBuffing
+					
+					// 红润
+					this.$refs.CameraView.setBeautyParam(4, 0.5);
+					this.$refs.CameraView.setBeautyParam(5, 0.5);
+					this.$refs.CameraView.setBeautyParam(7, 0.5);
+					this.$refs.CameraView.setBeautyParam(8, 0.5);
+					this.$refs.CameraView.setBeautyParam(9, 0.5);
+					this.$refs.CameraView.setBeautyParam(10, 0.5);
+					this.$refs.CameraView.setBeautyParam(11, 0.5);
+					this.$refs.CameraView.setBeautyParam(12, 0.5);
+					this.$refs.CameraView.setBeautyParam(13, 0.5);
+					this.$refs.CameraView.setBeautyParam(14, 0.5);
+			
+					console.log('Default beauty params set');
+				} catch (error) {
+					console.error('Failed to set default beauty params:', error);
+				}
+			},
+			
+			// 图片美颜处理
+			processImageBeauty() {
+				// 直接调用选择图片功能
+				this.chooseImage();
+			},
+			
+			// 切换相机美颜
+			toggleCameraBeauty() {
+				this.cameraBeautyEnabled = !this.cameraBeautyEnabled;
+				
+				if (this.cameraBeautyEnabled) {
+					uni.showToast({
+						title: '相机美颜已开启',
+						icon: 'success'
+					});
+					
+					if (this.$refs.CameraView) {
+						this.$refs.CameraView.toggleBeauty();
+					}
+					
+					// 设置默认美颜参数
+					this.setDefaultBeautyParams();
+					this.setAdvanceBeautyParams();
+					
+					// 延迟启动相机，确保组件已渲染
+					// this.$nextTick(() => {
+					// 	setTimeout(() => {
+					// 		this.startCamera();
+					// 		if (this.$refs.CameraView) {
+					// 			this.$refs.CameraView.startFrame();
+					// 			// 设置默认美颜参数
+					// 			this.setDefaultBeautyParams();
+					// 			this.setAdvanceBeautyParams();
+					// 		}
+					// 	}, 500);
+					// });
+				} else {
+					uni.showToast({
+						title: '相机美颜已关闭',
+						icon: 'none'
+					});
+					if (this.$refs.CameraView) {
+						this.$refs.CameraView.toggleBeauty();
+					}
+				}
+			},
+			
+			// 销毁美颜引擎
+			destroyBeautyEngine() {
+				try {
+					const success = destroyEngine();
+					// if (success) {
+					// 	this.engineInitialized = false;
+					// 	this.cameraBeautyEnabled = false;
+					// 	this.stopCamera();
+					// 	uni.showToast({
+					// 		title: '美颜引擎已销毁',
+					// 		icon: 'success'
+					// 	});
+					// } else {
+					// 	uni.showToast({
+					// 		title: '销毁引擎失败',
+					// 		icon: 'error'
+					// 	});
+					// }
+				} catch (error) {
+					console.error('Failed to destroy beauty engine:', error);
+					uni.showToast({
+						title: '销毁失败: ' + error.message,
+						icon: 'error'
+					});
+				}
+			},
+			
+			// 美颜参数变化处理
+			onSkinBuffingChange(e) {
+				this.skinBuffingValue = e.detail.value;
+				this.updateBeautyParam(0, this.skinBuffingValue);
+			},
+			
+			onSkinWhitingChange(e) {
+				this.skinWhitingValue = e.detail.value;
+				this.updateBeautyParam(1, this.skinWhitingValue);
+			},
+			
+			onEyeEnlargeChange(e) {
+				this.eyeEnlargeValue = e.detail.value;
+				this.updateBeautyParam(4, this.eyeEnlargeValue);
+			},
+			
+			onFaceThinChange(e) {
+				this.faceThinValue = e.detail.value;
+				this.updateBeautyParam(5, this.faceThinValue);
+			},
+			
+			// 更新美颜参数
+			updateBeautyParam(paramNumber, value) {
+				try {
+					this.$refs.CameraView.setBeautyParam(paramNumber, value);
+					console.log(`Updated beauty param ${paramNumber} to ${value}`);
+				} catch (error) {
+					console.error('Failed to update beauty param:', error);
+				}
+			},
+			
+			// 相机相关方法
+			onTakePhoto(res) {
+				console.log('拍照结果:', res);
+				this.takeBack(res);
+			},
+			
+			onGetFrame(res) {
+				console.log('获取帧数据:', res);
+				// 这里可以处理视频帧数据，应用美颜效果
+			},
+			
+			onGetBeautyImage(res) {
+				console.log('获取美颜后的照片:', res);
+			},
+			
+			startFrame() {
+				this.startFraming = true;
+				if (this.$refs.CameraView) {
+					console.log('开启抓帧');
+					this.$refs.CameraView.startFrame();
+				}
+			},
+			
+			stopFrame() {
+				this.startFraming = false;
+				if (this.$refs.CameraView) {
+					console.log('停止抓帧');
+					this.$refs.CameraView.stopFrame();
+				}
+			},
+			
+			// startCamera() {
+			// 	if (this.$refs.CameraView) {
+			// 		this.$refs.CameraView.startCamera();
+			// 	}
+			// },
+			
+			// stopCamera() {
+			// 	if (this.$refs.CameraView) {
+			// 		this.$refs.CameraView.stopCamera();
+			// 	}
+			// },
+			
+			takePhoto() {
+				console.log("开始拍照");
+				if (this.$refs.CameraView) {
+					this.$refs.CameraView.takePhoto();
+				}
+			},
+			
+			openFlash() {
+				if (this.$refs.CameraView) {
+					this.$refs.CameraView.toggleTorch();
+				}
+			},
+			
+			switchCamera() {
+				if (this.$refs.CameraView) {
+					this.$refs.CameraView.toggleCamera();
+				}
+			},
+			
+			onPermissionDeny() {
+				console.log("权限被拒绝");
+				uni.showToast({
+					title: "你拒绝了权限设置，即将返回上一页",
+					icon: 'error',
+					duration: 1000
+				});
+				this.cameraBeautyEnabled = false;
+			},
+			
+			takeBack(res) {
+				this.flashOpen = false;
+				if (this.returnisFile) {
+					this.text = JSON.stringify(res);
+					this.src = 'file://' + res.url;
+				} else {
+					this.text = '回调base64数据，在控制台输出';
+					this.src = 'data:image/jpg;base64,' + res.data;
+				}
+			},
+			
+			// 显示焦点框
+			showFocus() {
+				this.showFocusBox = true;
+				setTimeout(() => {
+					this.showFocusBox = false;
+				}, 2000);
+			},
+			
+			// 选择图片
+			chooseImage() {
+				uni.chooseImage({
+					count: 6,
+					sizeType: ['original', 'compressed'],
+					sourceType: ['album', 'camera'], // 相册和相机都可以
+					success: (res) => {
+						console.log('选择图片成功:', res);
+						this.selectedImages = res.tempFilePaths;
+						this.showImagePreview = true;
+						
+						uni.showToast({
+							title: `已选择${res.tempFilePaths.length}张图片`,
+							icon: 'success',
+							duration: 2000
+						});
+						
+						if (res.tempFilePaths.length === 1) {
+							this.src = res.tempFilePaths[0];
+							console.log("图片路径",this.src);
+							 let src = res.tempFilePaths[0]
+							    // 去掉 file:// 或 file:///
+							    src = src.replace(/^file:\/+/, '')
+								// 设置默认美颜参数
+								this.setDefaultBeautyParams();
+								this.setAdvanceBeautyParams();
+							this.$refs.CameraView.beautifyImage(src)
+						}
+					},
+					fail: (err) => {
+						console.error('选择图片失败:', err);
+						uni.showToast({
+							title: '选择图片失败',
+							icon: 'error',
+							duration: 2000
+						});
+					}
+				});
+			},
+			
+			// 预览图片
+			previewImage(index) {
+				uni.previewImage({
+					current: index,
+					urls: this.selectedImages
+				});
+			},
+			
+			// 清除选择的图片
+			clearSelectedImages() {
+				this.selectedImages = [];
+				this.showImagePreview = false;
+				uni.showToast({
+					title: '已清除选择',
+					icon: 'success',
+					duration: 1500
+				});
+			}
+		}
+	}
+</script>
+
+<style>
+<style lang="css">
+.content {
+  flex: 1;
+  background-color: #f2f3f5;
+}
+.text-area {
+  margin-top: 40rpx;
+  padding: 0 30rpx;
+  align-items: center;
+}
+.title {
+  font-size: 36rpx;
+  color: #333;
+  font-weight: bold;
+}
+
+
+.demo-section {
+  padding: 20rpx;
+}
+.btn {
+  height: 80rpx;
+  border-radius: 12rpx;
+  margin-bottom: 20rpx;
+  align-items: center;
+  justify-content: center;
+}
+.btn-primary {
+  background-color: #007aff;
+}
+.btn-danger {
+  background-color: #ff3b30;
+}
+.btn.disabled {
+  background-color: #999;
+}
+.btn-text {
+  color: #fff;
+  font-size: 30rpx;
+}
+.status-section {
+  margin: 30rpx 0;
+  padding: 20rpx;
+  background-color: #fff;
+  border-radius: 10rpx;
+}
+.status-text {
+  font-size: 28rpx;
+  color: #666;
+  margin-bottom: 10rpx;
+}
+.params-section {
+  background-color: #fff;
+  padding: 20rpx;
+  border-radius: 10rpx;
+  margin-top: 20rpx;
+}
+.params-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 20rpx;
+  text-align: center;
+}
+.param-item {
+  margin-bottom: 20rpx;
+}
+.param-label {
+  font-size: 26rpx;
+  color: #333;
+  margin-bottom: 10rpx;
+}
+.param-slider {
+  width: 100%;
+  height: 40rpx;
+}
+.camera-container {
+  flex: 1;
+  background-color: #000;
+  padding: 10rpx;
+  position: relative;
+}
+.camera-view {
+		width: 100%;
+		height: 600rpx;
+		background-color: #333333;
+	}
+	
+	
+	.camera-wrapper {
+	  flex-direction: column;  /* 垂直排列 */
+	  display: flex;
+	  height: 600rpx + 200rpx + 40rpx; /* 600rpx 预览 + 200rpx 按钮区 + padding */
+	}
+
+	.camera-controls {
+		flex-direction: row;
+		justify-content: center;
+		align-items: center;
+		flex-wrap: wrap;
+		width: 600rpx;
+		/* height: 200rpx; */
+		padding: 20rpx;
+	}
+
+	.control-btn {
+		width: 200rpx;
+		height: 80rpx;
+		margin: 10rpx;
+		background-color: #007AFF;
+		color: #ffffff;
+		border-radius: 10rpx;
+		font-size: 24rpx;
+	}
+
+	/* 覆盖层样式 */
+	.camera-overlay-top {
+		position: absolute;
+		top: 20rpx;
+		left: 20rpx;
+		right: 20rpx;
+		z-index: 10000;
+		display: flex;
+		justify-content: center;
+	}
+
+	.overlay-info {
+		background-color: rgba(0, 0, 0, 0.5);
+		padding: 10rpx 20rpx;
+		border-radius: 20rpx;
+	}
+
+	.overlay-text {
+		color: #ffffff;
+		font-size: 24rpx;
+	}
+
+	.camera-overlay-center {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		z-index: 10000;
+	}
+
+	.focus-box {
+		width: 100rpx;
+		height: 100rpx;
+		border: 4rpx solid #ffffff;
+		border-radius: 10rpx;
+		background-color: transparent;
+	}
+
+	.focus-border {
+		width: 100%;
+		height: 100%;
+		border: 2rpx solid #007AFF;
+		border-radius: 8rpx;
+		animation: focus-pulse 1s infinite;
+	}
+
+	.camera-overlay-bottom {
+		position: absolute;
+		bottom: 20rpx;
+		left: 20rpx;
+		right: 20rpx;
+		z-index: 10000;
+		display: flex;
+		justify-content: center;
+	}
+
+	.beauty-indicator {
+		background-color: rgba(0, 122, 255, 0.8);
+		padding: 8rpx 16rpx;
+		border-radius: 16rpx;
+	}
+
+	.indicator-text {
+		color: #ffffff;
+		font-size: 20rpx;
+	}
+
+	@keyframes focus-pulse {
+		0% {
+			opacity: 1;
+			transform: scale(1);
+		}
+		50% {
+			opacity: 0.6;
+			transform: scale(1.1);
+		}
+		100% {
+			opacity: 1;
+			transform: scale(1);
+		}
+	}
+
+	/* 图片预览样式 */
+	.image-preview-section {
+		background-color: #ffffff;
+		margin: 20rpx;
+		border-radius: 10rpx;
+		padding: 20rpx;
+		box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.1);
+	}
+
+	.preview-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 15rpx;
+	}
+
+	.preview-title {
+		font-size: 30rpx;
+		font-weight: bold;
+		color: #333333;
+	}
+
+	.preview-tips {
+		margin-bottom: 15rpx;
+	}
+
+	.tips-text {
+		font-size: 24rpx;
+		color: #666666;
+		line-height: 1.5;
+	}
+
+	.clear-btn {
+		background-color: #ff4757;
+		color: #ffffff;
+		border: none;
+		border-radius: 20rpx;
+		padding: 10rpx 20rpx;
+		font-size: 24rpx;
+	}
+
+	.image-scroll {
+		white-space: nowrap;
+		width: 100%;
+	}
+
+	.image-list {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.image-item {
+		position: relative;
+		margin-right: 20rpx;
+		border-radius: 10rpx;
+		overflow: hidden;
+		background-color: #f5f5f5;
+	}
+
+	.preview-image {
+		width: 150rpx;
+		height: 150rpx;
+		border-radius: 10rpx;
+	}
+
+	.image-index {
+		position: absolute;
+		top: 5rpx;
+		right: 5rpx;
+		background-color: rgba(0, 0, 0, 0.6);
+		color: #ffffff;
+		width: 30rpx;
+		height: 30rpx;
+		border-radius: 15rpx;
+		text-align: center;
+		line-height: 30rpx;
+		font-size: 18rpx;
+	}
+</style>
+
